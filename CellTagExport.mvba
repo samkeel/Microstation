@@ -1,0 +1,97 @@
+'universal variables
+'File System Related Variables
+Dim myFSO As New Scripting.FileSystemObject
+Dim myFolder As Scripting.Folder
+Dim myFile As Scripting.File
+'Excel Related Variables
+Dim myWS As Excel.Worksheet
+Dim xl As Excel.Application
+Dim CurRow As Integer
+Dim rootfolder As String
+
+Sub getCellTagsOutToExcel()
+
+Dim sFullFileName As String
+Dim oFile As DesignFile
+Dim xlwb As Excel.Workbook
+
+Set xl = CreateObject("Excel.Application")
+Set xlwb = xl.Workbooks.Add
+
+CurRow = 3
+
+rootfolder = Application.ActiveDesignFile.Path
+
+Set myFolder = myFSO.GetFolder(rootfolder)
+For Each myFile In myFolder.Files
+    Select Case UCase(Right(myFile.Name, 3))
+    'iterate through all files in the directory and only opening dgn files
+    Case "DGN"
+        sFullFileName = myFile.Path
+        Set oFile = OpenDesignFileForProgram(sFullFileName)
+        'Debug.Print oFile.Name        
+        Call ExtractTags(oFile, CurRow, xl, xlwb)
+        oFile.Close
+    End Select
+Next
+
+    xl.Application.DisplayAlerts = False
+    xlwb.SaveAs rootfolder & "\" & "CellTags", FileFormat:=xlExcel8
+    xl.Application.DisplayAlerts = True
+
+    xl.Visible = True
+    
+    Set xlwb = Nothing
+    Set xl = Nothing
+
+End Sub
+
+Private Sub ExtractTags(ByRef oFile As DesignFile, CurRow As Integer, xl As Excel.Application, xlwb As Excel.Workbook)
+Dim oEnum As ElementEnumerator
+Dim oScan As New ElementScanCriteria
+Dim myModel As String
+Dim oCell As CellElement
+Dim oTags() As TagElement
+Dim i As Integer
+Dim xlws As Excel.Worksheet
+Dim dummyvalue As String
+ 
+Set xlws = xlwb.Worksheets(1)
+
+myModel = "Layout1"
+
+oScan.ExcludeAllTypes
+oScan.IncludeType msdElementTypeCellHeader
+
+Set oEnum = oFile.Models(myModel).Scan(oScan)
+
+Do While oEnum.MoveNext
+    Set oCell = oEnum.Current.AsCellElement
+    If oCell.HasAnyTags Then
+        oTags = oCell.GetTags()
+        'set value to blank
+        dummyvalue = ""
+        For i = LBound(oTags) To UBound(oTags)
+            If oTags(i).TagSetName = "Tagset name" Then
+                If oTags(i).TagDefinitionName = "name1" Then
+                    'Debug.Print oTags(i).Value
+                    xlws.Cells(CurRow, 2) = oTags(i).Value
+                    dummyvalue = oTags(i).Value
+                End If
+                If oTags(i).TagDefinitionName = "name2" Then
+                    'Debug.Print oTags(i).Value
+                    xlws.Cells(CurRow, 3) = oTags(i).Value
+                    dummyvalue = oTags(i).Value
+                End If
+            End If
+        Next i
+        'if value not blank then increase row count
+        If dummyvalue = "" Then        
+        Else
+            xlws.Cells(CurRow, 1) = oFile.Name
+            CurRow = CurRow + 1
+        End If
+    End If
+Loop
+
+End Sub
